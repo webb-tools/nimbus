@@ -36,15 +36,25 @@ use sp_runtime::{
 
 /// The Nimbus verifier strips the seal digest, and checks that it is a valid signature by
 /// the same key that was injected into the runtime and noted in the Seal digest.
-/// From Nimbu's perspective any block that faithfully reports its authorship to the runtime
+/// From Nimbus' perspective any block that faithfully reports its authorship to the runtime
 /// is valid. The intention is that the runtime itself may then put further restrictions on
 /// the identity of the author.
-struct Verifier<Client, Block, CIDP> {
+pub struct Verifier<Client, Block, CIDP> {
 	client: Arc<Client>,
 	create_inherent_data_providers: CIDP,
 	_marker: PhantomData<Block>,
 }
 
+impl<Client, Block, CIDP> Verifier<Client, Block, CIDP> {
+	/// Build a [`NimbusVerifier`] ( allows for composing nimbus with other consensus engines )
+	pub fn new(client: Arc<Client>, create_inherent_data_providers: CIDP) -> Self {
+		Self {
+			client,
+			create_inherent_data_providers,
+			_marker: PhantomData {},
+		}
+	}
+}
 #[async_trait::async_trait]
 impl<Client, Block, CIDP> VerifierT<Block> for Verifier<Client, Block, CIDP>
 where
@@ -201,11 +211,7 @@ where
 	<Client as ProvideRuntimeApi<Block>>::Api: BlockBuilderApi<Block>,
 	CIDP: CreateInherentDataProviders<Block, ()> + 'static,
 {
-	let verifier = Verifier {
-		client,
-		create_inherent_data_providers,
-		_marker: PhantomData,
-	};
+	let verifier = Verifier::new(client, create_inherent_data_providers);
 
 	Ok(BasicQueue::new(
 		verifier,
