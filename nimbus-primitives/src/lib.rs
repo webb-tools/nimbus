@@ -25,9 +25,6 @@ use sp_application_crypto::KeyTypeId;
 use sp_runtime::generic::DigestItem;
 use sp_runtime::traits::BlockNumberProvider;
 use sp_runtime::ConsensusEngineId;
-#[cfg(feature = "runtime-benchmarks")]
-use sp_std::vec;
-use sp_std::vec::Vec;
 
 pub mod digests;
 mod inherents;

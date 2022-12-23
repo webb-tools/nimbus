@@ -52,11 +52,11 @@ pub use manual_seal::NimbusManualSealConsensusDataProvider;
 const LOG_TARGET: &str = "filtering-consensus";
 
 /// The implementation of the relay-chain provided consensus for parachains.
-pub struct NimbusConsensus<B, PF, BI, ParaClient, CIDP, DP = ()> {
+pub struct NimbusConsensus<B: BlockT, PF, BI, ParaClient, CIDP, BE, DP = ()> {
 	para_id: ParaId,
 	proposer_factory: Arc<Mutex<PF>>,
 	create_inherent_data_providers: Arc<CIDP>,
-	block_import: Arc<futures::lock::Mutex<ParachainBlockImport<BI>>>,
+	block_import: Arc<futures::lock::Mutex<ParachainBlockImport<B, BI, BE>>>,
 	parachain_client: Arc<ParaClient>,
 	keystore: SyncCryptoStorePtr,
 	skip_prediction: bool,
@@ -64,7 +64,7 @@ pub struct NimbusConsensus<B, PF, BI, ParaClient, CIDP, DP = ()> {
 	_phantom: PhantomData<B>,
 }
 
-impl<B, PF, BI, ParaClient, CIDP, DP> Clone for NimbusConsensus<B, PF, BI, ParaClient, CIDP, DP> {
+impl<B: BlockT, PF, BI, ParaClient, CIDP, BE, DP> Clone for NimbusConsensus<B, PF, BI, ParaClient, CIDP, BE, DP> {
 	fn clone(&self) -> Self {
 		Self {
 			para_id: self.para_id,
@@ -80,7 +80,7 @@ impl<B, PF, BI, ParaClient, CIDP, DP> Clone for NimbusConsensus<B, PF, BI, ParaC
 	}
 }
 
-impl<B, PF, BI, ParaClient, CIDP, DP> NimbusConsensus<B, PF, BI, ParaClient, CIDP, DP>
+impl<B, PF, BI, ParaClient, CIDP, BE, DP> NimbusConsensus<B, PF, BI, ParaClient, CIDP, BE, DP>
 where
 	B: BlockT,
 	PF: 'static,
@@ -88,6 +88,7 @@ where
 	ParaClient: ProvideRuntimeApi<B> + 'static,
 	CIDP: CreateInherentDataProviders<B, (PHash, PersistedValidationData, NimbusId)> + 'static,
 	DP: DigestsProvider<NimbusId, <B as BlockT>::Hash> + 'static,
+	BE: sc_client_api::Backend<B> + 'static
 {
 	/// Create a new instance of nimbus consensus.
 	pub fn build(
@@ -100,7 +101,8 @@ where
 			keystore,
 			skip_prediction,
 			additional_digests_provider,
-		}: BuildNimbusConsensusParams<PF, BI, ParaClient, CIDP, DP>,
+			backend
+		}: BuildNimbusConsensusParams<PF, BI, ParaClient, CIDP, DP, BE>,
 	) -> Box<dyn ParachainConsensus<B>>
 	where
 		Self: ParachainConsensus<B>,
@@ -111,6 +113,7 @@ where
 			create_inherent_data_providers: Arc::new(create_inherent_data_providers),
 			block_import: Arc::new(futures::lock::Mutex::new(ParachainBlockImport::new(
 				block_import,
+				backend
 			))),
 			parachain_client,
 			keystore,
@@ -147,6 +150,7 @@ where
 
 		inherent_data_providers
 			.create_inherent_data()
+			.await
 			.map_err(|e| {
 				tracing::error!(
 					target: LOG_TARGET,
@@ -266,8 +270,8 @@ where
 }
 
 #[async_trait::async_trait]
-impl<B, PF, BI, ParaClient, CIDP, DP> ParachainConsensus<B>
-	for NimbusConsensus<B, PF, BI, ParaClient, CIDP, DP>
+impl<B, PF, BI, ParaClient, CIDP, BE, DP> ParachainConsensus<B>
+	for NimbusConsensus<B, PF, BI, ParaClient, CIDP, BE, DP>
 where
 	B: BlockT,
 	BI: BlockImport<B> + Send + Sync + 'static,
@@ -282,6 +286,7 @@ where
 	ParaClient::Api: NimbusApi<B>,
 	CIDP: CreateInherentDataProviders<B, (PHash, PersistedValidationData, NimbusId)> + 'static,
 	DP: DigestsProvider<NimbusId, <B as BlockT>::Hash> + 'static + Send + Sync,
+	BE: sc_client_api::Backend<B> + 'static
 {
 	async fn produce_candidate(
 		&mut self,
@@ -431,7 +436,7 @@ where
 ///
 /// I briefly tried the async keystore approach, but decided to go sync so I can copy
 /// code from Aura. Maybe after it is working, Jeremy can help me go async.
-pub struct BuildNimbusConsensusParams<PF, BI, ParaClient, CIDP, DP> {
+pub struct BuildNimbusConsensusParams<PF, BI, ParaClient, CIDP, DP, BE> {
 	pub para_id: ParaId,
 	pub proposer_factory: PF,
 	pub create_inherent_data_providers: CIDP,
@@ -440,4 +445,5 @@ pub struct BuildNimbusConsensusParams<PF, BI, ParaClient, CIDP, DP> {
 	pub keystore: SyncCryptoStorePtr,
 	pub skip_prediction: bool,
 	pub additional_digests_provider: DP,
+	pub backend: Arc<BE>
 }
