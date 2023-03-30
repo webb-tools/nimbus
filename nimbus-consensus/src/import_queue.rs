@@ -159,7 +159,7 @@ where
 				.client
 				.runtime_api()
 				.check_inherents(
-					&BlockId::Hash(*block_params.header.parent_hash()),
+					*block_params.header.parent_hash(),
 					block.clone(),
 					inherent_data,
 				)

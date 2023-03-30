@@ -23,7 +23,7 @@
 use cumulus_client_consensus_common::{
 	ParachainBlockImport, ParachainCandidate, ParachainConsensus,
 };
-use cumulus_primitives_core::{relay_chain::v2::Hash as PHash, ParaId, PersistedValidationData};
+use cumulus_primitives_core::{relay_chain::Hash as PHash, ParaId, PersistedValidationData};
 pub use import_queue::{import_queue, NimbusBlockImport, Verifier};
 use log::{debug, info, warn};
 use nimbus_primitives::{
@@ -214,7 +214,7 @@ where
 		return None;
 	}
 
-	let at = BlockId::Hash(parent.hash());
+	let at = parent.hash();
 
 	// Iterate keys until we find an eligible one, or run out of candidates.
 	// If we are skipping prediction, then we author with the first key we find.
@@ -224,7 +224,7 @@ where
 		// That I should be passing Vec<u8> across the wasm boundary?
 		NimbusApi::can_author(
 			&*client.runtime_api(),
-			&at,
+			at,
 			NimbusId::from_slice(&type_public_pair.1).expect("Provided keys should be valid"),
 			slot_number,
 			parent,
@@ -299,18 +299,18 @@ where
 	) -> Option<ParachainCandidate<B>> {
 		// Determine if runtime change
 		let runtime_upgraded = if *parent.number() > sp_runtime::traits::Zero::zero() {
-			let at = BlockId::Hash(parent.hash());
-			let parent_at = BlockId::<B>::Hash(*parent.parent_hash());
+			let at = parent.hash();
+			let parent_at = parent.parent_hash();
 			use sp_api::Core as _;
 			let previous_runtime_version: sp_api::RuntimeVersion = self
 				.parachain_client
 				.runtime_api()
-				.version(&parent_at)
+				.version(*parent_at)
 				.expect("Runtime api access to not error.");
 			let runtime_version: sp_api::RuntimeVersion = self
 				.parachain_client
 				.runtime_api()
-				.version(&at)
+				.version(at)
 				.expect("Runtime api access to not error.");
 
 			previous_runtime_version != runtime_version
